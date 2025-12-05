@@ -424,21 +424,25 @@ window.filterData = function () {
 
     // === Filter berdasarkan hasil ===
     if (show && resultFilter) {
+      // Normalisasi hasilTextRaw untuk perbandingan yang tepat
+      const normalizedHasil = hasilTextRaw
+        .replace(/\s+/g, " ") // normalize spaces
+        .replace(/-/g, " "); // replace hyphens with spaces
+      
       const isPree =
-        hasilText === "preeklampsia" || hasilText === "preeclampsia";
+        normalizedHasil.includes("preeklampsia") && 
+        !normalizedHasil.includes("non");
 
       const isNonPree =
-        hasilText === "non-preeklampsia" ||
-        hasilText === "non preeklampsia" ||
-        hasilText === "non-preeclampsia";
+        normalizedHasil.includes("non") && 
+        normalizedHasil.includes("preeklampsia");
 
-      const wantsNon = resultFilter.includes("non");
-
-      if (wantsNon && !isNonPree) {
+      // resultFilter value: "preeklampsia" atau "non-preeklampsia"
+      if (resultFilter === "preeklampsia" && !isPree) {
         show = false;
       }
 
-      if (!wantsNon && !isPree) {
+      if (resultFilter === "non-preeklampsia" && !isNonPree) {
         show = false;
       }
     }
