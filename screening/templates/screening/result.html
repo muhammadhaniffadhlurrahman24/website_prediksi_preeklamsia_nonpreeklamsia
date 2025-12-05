@@ -52,7 +52,7 @@
 
             <div class="result-recommendations">
               <h3>Rekomendasi</h3>
-              <ul>
+              <ul id="recommendationsList">
                 {% for item in recommendations %}
                 <li>{{ item }}</li>
                 {% endfor %}
@@ -60,11 +60,9 @@
             </div>
 
             <div class="result-buttons">
-              <a
-                href="{% url 'download_result' %}?submission_id={{ submission_id }}"
-                class="btn btn-primary btn-full"
-                >Download Laporan</a
-              >
+              <button class="btn btn-primary btn-full" type="button" onclick="previewReport()">
+                Preview / Cetak
+              </button>
               <a href="{% url 'screening' %}" class="btn btn-secondary btn-full"
                 >Prediksi Baru</a
               >
@@ -73,5 +71,228 @@
         </div>
       </div>
     </div>
+
+    <script>
+      // URL untuk download PDF
+      const downloadPdfUrl = "{% url 'download_result' %}?submission_id={{ submission_id }}";
+      
+      // Simpan data prediksi ke sessionStorage untuk dipakai saat preview
+      (function () {
+        const clean = (v) => {
+          if (v === undefined || v === null || v === "None" || v === "") return "";
+          return String(v).trim();
+        };
+        const yesNoVal = (v) => {
+          const val = String(v).trim();
+          if (val === "True" || val === "true" || val === "1" || val === "1.0" || val === "Yes" || val === "yes") return "1";
+          if (val === "False" || val === "false" || val === "0" || val === "0.0" || val === "No" || val === "no" || val === "") return "0";
+          if (val === "None" || val === "null" || val === "undefined") return "";
+          return val || "";
+        };
+        
+        const resultRaw = "{{ result|default:'' }}";
+        const confidenceRaw = "{{ confidence|default:'' }}";
+
+        const formData = {
+          patient_name: clean("{{ submission.patient_name|default:patient_name|default:''|escapejs }}"),
+          patient_age: clean("{{ submission.patient_age|default:patient_age|default:'' }}"),
+          district_city: clean("{{ submission.district_city|default:''|escapejs }}"),
+          education_level: clean("{{ submission.education_level|default:education|default:''|escapejs }}"),
+          current_occupation: clean("{{ submission.current_occupation|default:''|escapejs }}"),
+          marital_status: clean("{{ submission.marital_status|default:''|escapejs }}"),
+          marriage_order: clean("{{ submission.marriage_order|default:'' }}"),
+          parity: clean("{{ submission.parity|default:''|escapejs }}"),
+          new_partner_pregnancy: yesNoVal("{{ submission.new_partner_pregnancy|default:'' }}"),
+          child_spacing_over_10_years: yesNoVal("{{ submission.child_spacing_over_10_years|default:'' }}"),
+          ivf_pregnancy: yesNoVal("{{ submission.ivf_pregnancy|default:'' }}"),
+          multiple_pregnancy: yesNoVal("{{ submission.multiple_pregnancy|default:'' }}"),
+          smoker: yesNoVal("{{ submission.smoker|default:'' }}"),
+          planned_pregnancy: yesNoVal("{{ submission.planned_pregnancy|default:'' }}"),
+          family_history_pe: yesNoVal("{{ submission.family_history_pe|default:'' }}"),
+          personal_history_pe: yesNoVal("{{ submission.personal_history_pe|default:'' }}"),
+          chronic_hypertension: yesNoVal("{{ submission.chronic_hypertension|default:'' }}"),
+          diabetes_mellitus: yesNoVal("{{ submission.diabetes_mellitus|default:'' }}"),
+          kidney_disease: yesNoVal("{{ submission.kidney_disease|default:'' }}"),
+          autoimmune_disease: yesNoVal("{{ submission.autoimmune_disease|default:'' }}"),
+          aps_history: yesNoVal("{{ submission.aps_history|default:'' }}"),
+          pre_pregnancy_weight: clean("{{ submission.pre_pregnancy_weight|default:'' }}"),
+          height_cm: clean("{{ submission.height_cm|default:'' }}"),
+          bmi: clean("{{ submission.bmi|default:bmi|default:'' }}"),
+          lila_cm: clean("{{ submission.lila_cm|default:'' }}"),
+          systolic_bp: clean("{{ submission.systolic_bp|default:'' }}"),
+          diastolic_bp: clean("{{ submission.diastolic_bp|default:'' }}"),
+          map_mmhg: clean("{{ submission.map_mmhg|default:'' }}"),
+          hemoglobin: clean("{{ submission.hemoglobin|default:'' }}"),
+          family_history_hypertension: yesNoVal("{{ submission.family_history_hypertension|default:'' }}"),
+          family_history_kidney: yesNoVal("{{ submission.family_history_kidney|default:'' }}"),
+          family_history_heart: yesNoVal("{{ submission.family_history_heart|default:'' }}"),
+        };
+
+        const predictionResult = {
+          prediction: resultRaw.toLowerCase().replace(/\s+/g, "-"),
+          confidence: confidenceRaw.replace("%", "").trim(),
+          formData,
+        };
+
+        try {
+          sessionStorage.setItem(
+            "predictionResult",
+            JSON.stringify(predictionResult)
+          );
+        } catch (e) {
+          console.warn("Unable to store predictionResult in sessionStorage", e);
+        }
+      })();
+
+      // Fungsi preview & print (berbasis kode yang Anda berikan)
+      function previewReport() {
+        const result = JSON.parse(sessionStorage.getItem("predictionResult"));
+        if (!result) {
+          alert("Tidak ada data hasil prediksi yang dapat diunduh.");
+          return;
+        }
+        const fd = result.formData || {};
+        const yesNo = (v) => {
+          if (v === "1" || v === 1 || v === true || v === "True" || v === "true") return "Ya";
+          if (v === "0" || v === 0 || v === false || v === "False" || v === "false") return "Tidak";
+          if (v === undefined || v === null || v === "" || v === "None") return "-";
+          return String(v);
+        };
+
+        let bmiVal = "-";
+        if (fd.bmi && fd.bmi !== "") {
+          const val = parseFloat(fd.bmi);
+          if (!isNaN(val)) bmiVal = val.toFixed(1);
+        }
+
+        let reportHTML = `
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Laporan Prediksi Preeklampsia</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #0066FF; }
+        .result-box { padding: 20px; background: #f0f9ff; border: 2px solid #0066FF; border-radius: 8px; margin: 20px 0; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        td { padding: 8px 10px; border-bottom: 1px solid #ccc; vertical-align: top; }
+        .label { font-weight: bold; width: 35%; }
+        .recommendations { margin-top: 30px; }
+        .recommendations ul { margin-top: 10px; }
+        .recommendations li { margin-bottom: 8px; }
+        h3 { margin-top: 30px; color: #111827; }
+        .action-buttons { margin: 20px 0; text-align: center; }
+        .btn-download { 
+          background-color: #0066FF; 
+          color: white; 
+          padding: 10px 20px; 
+          border: none; 
+          border-radius: 5px; 
+          cursor: pointer; 
+          font-size: 14px; 
+          text-decoration: none;
+          display: inline-block;
+          margin: 5px;
+        }
+        .btn-download:hover { background-color: #0052CC; }
+        .btn-print { 
+          background-color: #28a745; 
+          color: white; 
+          padding: 10px 20px; 
+          border: none; 
+          border-radius: 5px; 
+          cursor: pointer; 
+          font-size: 14px; 
+          text-decoration: none;
+          display: inline-block;
+          margin: 5px;
+        }
+        .btn-print:hover { background-color: #218838; }
+    </style>
+</head>
+<body>
+    <div class="action-buttons">
+      <a href="${downloadPdfUrl}" class="btn-download" download>📥 Download PDF</a>
+      <button class="btn-print" onclick="window.print()">🖨️ Cetak</button>
+    </div>
+    <h1>Laporan Hasil Prediksi Preeklampsia</h1>
+    <p>Tanggal: ${new Date().toLocaleDateString("id-ID")}</p>
+    
+    <div class="result-box">
+        <h2>${result.prediction === "preeklampsia" || result.prediction === "preeclampsia" ? "PREEKLAMPSIA" : "NON-PREEKLAMPSIA"}</h2>
+        <p>Kepercayaan: <strong>${result.confidence}%</strong></p>
+    </div>
+    
+    <h3>Data Pasien</h3>
+    <table>
+        <tr><td class="label">Nama Pasien</td><td>${(fd.patient_name && fd.patient_name !== "" && fd.patient_name !== "None") ? fd.patient_name : "-"}</td></tr>
+        <tr><td class="label">Umur Pasien</td><td>${(fd.patient_age && fd.patient_age !== "" && fd.patient_age !== "None") ? fd.patient_age + " tahun" : "-"}</td></tr>
+        <tr><td class="label">Status Pendidikan Terakhir</td><td>${(fd.education_level && fd.education_level !== "" && fd.education_level !== "None") ? fd.education_level : "-"}</td></tr>
+        <tr><td class="label">Pekerjaan Saat Ini</td><td>${(fd.current_occupation && fd.current_occupation !== "" && fd.current_occupation !== "None") ? fd.current_occupation : "-"}</td></tr>
+        <tr><td class="label">Pernikahan Ke</td><td>${(fd.marriage_order && fd.marriage_order !== "" && fd.marriage_order !== "None") ? fd.marriage_order : "-"}</td></tr>
+        <tr><td class="label">Paritas</td><td>${(fd.parity && fd.parity !== "" && fd.parity !== "None") ? fd.parity : "-"}</td></tr>
+    </table>
+    <h3>Riwayat Kehamilan & Perencanaan</h3>
+    <table>
+        <tr><td class="label">Hamil Pasangan Baru</td><td>${yesNo(fd.new_partner_pregnancy)}</td></tr>
+        <tr><td class="label">Jarak Anak > 10 Tahun</td><td>${yesNo(fd.child_spacing_over_10_years)}</td></tr>
+        <tr><td class="label">Bayi Tabung</td><td>${yesNo(fd.ivf_pregnancy)}</td></tr>
+        <tr><td class="label">Gemeli (Kehamilan Kembar)</td><td>${yesNo(fd.multiple_pregnancy)}</td></tr>
+        <tr><td class="label">Perokok</td><td>${yesNo(fd.smoker)}</td></tr>
+        <tr><td class="label">Hamil Direncanakan</td><td>${yesNo(fd.planned_pregnancy)}</td></tr>
+    </table>
+    <h3>Riwayat Pribadi & Penyakit Ibu</h3>
+    <table>
+        <tr><td class="label">Riwayat Keluarga PE</td><td>${yesNo(fd.family_history_pe)}</td></tr>
+        <tr><td class="label">Riwayat PE</td><td>${yesNo(fd.personal_history_pe)}</td></tr>
+        <tr><td class="label">HT Kronis</td><td>${yesNo(fd.chronic_hypertension)}</td></tr>
+        <tr><td class="label">DM</td><td>${yesNo(fd.diabetes_mellitus)}</td></tr>
+        <tr><td class="label">Penyakit Ginjal</td><td>${yesNo(fd.kidney_disease)}</td></tr>
+        <tr><td class="label">Autoimune</td><td>${yesNo(fd.autoimmune_disease)}</td></tr>
+        <tr><td class="label">APS</td><td>${yesNo(fd.aps_history)}</td></tr>
+    </table>
+    <h3>Antropometri & Pemeriksaan</h3>
+    <table>
+        <tr><td class="label">BB Sebelum Hamil</td><td>${(fd.pre_pregnancy_weight && fd.pre_pregnancy_weight !== "" && fd.pre_pregnancy_weight !== "None") ? fd.pre_pregnancy_weight + " kg" : "-"}</td></tr>
+        <tr><td class="label">Tinggi Badan</td><td>${(fd.height_cm && fd.height_cm !== "" && fd.height_cm !== "None") ? fd.height_cm + " cm" : "-"}</td></tr>
+        <tr><td class="label">IMT</td><td>${bmiVal !== "-" ? bmiVal + " kg/m²" : "-"}</td></tr>
+        <tr><td class="label">LiLA</td><td>${(fd.lila_cm && fd.lila_cm !== "" && fd.lila_cm !== "None") ? fd.lila_cm + " cm" : "-"}</td></tr>
+        <tr><td class="label">TD Sistolik</td><td>${(fd.systolic_bp && fd.systolic_bp !== "" && fd.systolic_bp !== "None") ? fd.systolic_bp + " mmHg" : "-"}</td></tr>
+        <tr><td class="label">TD Diastolik</td><td>${(fd.diastolic_bp && fd.diastolic_bp !== "" && fd.diastolic_bp !== "None") ? fd.diastolic_bp + " mmHg" : "-"}</td></tr>
+        <tr><td class="label">MAP</td><td>${(fd.map_mmhg && fd.map_mmhg !== "" && fd.map_mmhg !== "None") ? fd.map_mmhg + " mmHg" : "-"}</td></tr>
+        <tr><td class="label">Hb</td><td>${(fd.hemoglobin && fd.hemoglobin !== "" && fd.hemoglobin !== "None") ? fd.hemoglobin + " gr/dL" : "-"}</td></tr>
+    </table>
+    <h3>Riwayat Penyakit Keluarga</h3>
+    <table>
+        <tr><td class="label">HT Keluarga</td><td>${yesNo(fd.family_history_hypertension)}</td></tr>
+        <tr><td class="label">Ginjal Keluarga</td><td>${yesNo(fd.family_history_kidney)}</td></tr>
+        <tr><td class="label">Jantung Keluarga</td><td>${yesNo(fd.family_history_heart)}</td></tr>
+    </table>
+    
+    <div class="recommendations">
+        <h3>Rekomendasi</h3>
+        <ul id="recList"></ul>
+    </div>
+    
+    <p style="margin-top: 40px; font-size: 12px; color: #666;">
+        <strong>Disclaimer:</strong> Laporan ini adalah hasil analisis otomatis dan bukan pengganti konsultasi medis profesional. 
+        Selalu konsultasikan dengan dokter atau tenaga medis profesional untuk diagnosis dan pengobatan yang tepat.
+    </p>
+</body>
+</html>
+  `;
+
+        const win = window.open("", "", "width=900,height=800");
+        win.document.write(reportHTML);
+        setTimeout(() => {
+          const recList = win.document.getElementById("recList");
+          const srcList = document.getElementById("recommendationsList");
+          if (recList && srcList) {
+            recList.innerHTML = srcList.innerHTML;
+          }
+          win.focus();
+        }, 400);
+      }
+    </script>
   </body>
 </html>

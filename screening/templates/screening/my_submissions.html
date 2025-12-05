@@ -35,10 +35,15 @@
               <td>{{ s.created_at }}</td>
               <td>
                 <a
+                  href="{% url 'download_result' %}?submission_id={{ s.id }}&preview=1"
+                  target="_blank"
+                  class="btn btn-secondary"
+                  style="margin-right: 6px;"
+                  >Preview PDF</a>
+                <a
                   href="{% url 'download_result' %}?submission_id={{ s.id }}"
                   class="btn btn-primary"
-                  >Download</a
-                >
+                  >Download PDF</a>
               </td>
             </tr>
             {% endfor %}

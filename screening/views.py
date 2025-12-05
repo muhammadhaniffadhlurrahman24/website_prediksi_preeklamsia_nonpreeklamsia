@@ -481,6 +481,7 @@ def submit_screening(request):
         "bmi": data.get("bmi"),
         "recommendations": recommendations,
         "submission_id": submission.id,
+        "submission": submission,  # Tambahkan submission object untuk akses semua field
     }
     return render(request, "screening/result.html", context)
 
@@ -492,63 +493,178 @@ def result_view(request):
 
 def download_result(request):
     from .models import ScreeningSubmission
+    from django.utils import timezone
 
     submission_id = request.GET.get("submission_id") or request.POST.get("submission_id")
+    preview = request.GET.get("preview")
+
     if submission_id:
         try:
             sub = ScreeningSubmission.objects.get(id=int(submission_id))
         except Exception:
             return HttpResponse("Submission not found", status=404)
 
-        # Try to generate PDF using ReportLab; fall back to text
+        def yes_no(val):
+            if val is True or val == "True" or str(val) == "1":
+                return "Ya"
+            if val is False or val == "False" or str(val) == "0":
+                return "Tidak"
+            return "-"
+
+        # Hitung IMT (sama seperti preview)
+        bmi_val = "-"
+        if sub.bmi:
+            try:
+                bmi_val = f"{float(sub.bmi):.1f}"
+            except:
+                pass
+        elif sub.pre_pregnancy_weight and sub.height_cm:
+            try:
+                bb = float(sub.pre_pregnancy_weight)
+                tb = float(sub.height_cm)
+                if tb > 0:
+                    bmi_calc = bb / ((tb / 100) ** 2)
+                    bmi_val = f"{bmi_calc:.1f}"
+            except:
+                pass
+
+        # Format tanggal sama seperti preview (toLocaleDateString("id-ID"))
+        if sub.created_at:
+            tanggal = sub.created_at.strftime("%d/%m/%Y")
+        else:
+            tanggal = timezone.now().strftime("%d/%m/%Y")
+        
+        # Format prediksi (sama seperti preview)
+        result_lower = (sub.result or "").lower().replace("-", "").replace(" ", "")
+        is_pree = result_lower in ("preeklampsia", "preeclampsia")
+        prediksi_text = "PREEKLAMPSIA" if is_pree else "NON-PREEKLAMPSIA"
+        
+        # Format confidence (pastikan ada % jika belum ada)
+        confidence_text = sub.confidence or "-"
+        if confidence_text != "-" and "%" not in str(confidence_text):
+            confidence_text = f"{confidence_text}%"
+
+        # Buat HTML dengan format yang sama persis seperti preview
+        html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Laporan Prediksi Preeklampsia</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 20px; }}
+        h1 {{ color: #0066FF; }}
+        .result-box {{ padding: 20px; background: #f0f9ff; border: 2px solid #0066FF; border-radius: 8px; margin: 20px 0; }}
+        table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+        td {{ padding: 8px 10px; border-bottom: 1px solid #ccc; vertical-align: top; }}
+        .label {{ font-weight: bold; width: 35%; }}
+        .recommendations {{ margin-top: 30px; }}
+        .recommendations ul {{ margin-top: 10px; }}
+        .recommendations li {{ margin-bottom: 8px; }}
+        h3 {{ margin-top: 30px; color: #111827; }}
+    </style>
+</head>
+<body>
+    <h1>Laporan Hasil Prediksi Preeklampsia</h1>
+    <p>Tanggal: {tanggal}</p>
+    
+    <div class="result-box">
+        <h2>{prediksi_text}</h2>
+        <p>Kepercayaan: <strong>{confidence_text}</strong></p>
+    </div>
+    
+    <h3>Data Pasien</h3>
+    <table>
+        <tr><td class="label">Nama Pasien</td><td>{sub.patient_name or '-'}</td></tr>
+        <tr><td class="label">Umur Pasien</td><td>{f'{sub.patient_age} tahun' if sub.patient_age else '-'}</td></tr>
+        <tr><td class="label">Status Pendidikan Terakhir</td><td>{sub.education_level or '-'}</td></tr>
+        <tr><td class="label">Pekerjaan Saat Ini</td><td>{sub.current_occupation or '-'}</td></tr>
+        <tr><td class="label">Pernikahan Ke</td><td>{sub.marriage_order or '-'}</td></tr>
+        <tr><td class="label">Paritas</td><td>{sub.parity or '-'}</td></tr>
+    </table>
+    <h3>Riwayat Kehamilan & Perencanaan</h3>
+    <table>
+        <tr><td class="label">Hamil Pasangan Baru</td><td>{yes_no(sub.new_partner_pregnancy)}</td></tr>
+        <tr><td class="label">Jarak Anak > 10 Tahun</td><td>{yes_no(sub.child_spacing_over_10_years)}</td></tr>
+        <tr><td class="label">Bayi Tabung</td><td>{yes_no(sub.ivf_pregnancy)}</td></tr>
+        <tr><td class="label">Gemeli (Kehamilan Kembar)</td><td>{yes_no(sub.multiple_pregnancy)}</td></tr>
+        <tr><td class="label">Perokok</td><td>{yes_no(sub.smoker)}</td></tr>
+        <tr><td class="label">Hamil Direncanakan</td><td>{yes_no(sub.planned_pregnancy)}</td></tr>
+    </table>
+    <h3>Riwayat Pribadi & Penyakit Ibu</h3>
+    <table>
+        <tr><td class="label">Riwayat Keluarga PE</td><td>{yes_no(sub.family_history_pe)}</td></tr>
+        <tr><td class="label">Riwayat PE</td><td>{yes_no(sub.personal_history_pe)}</td></tr>
+        <tr><td class="label">HT Kronis</td><td>{yes_no(sub.chronic_hypertension)}</td></tr>
+        <tr><td class="label">DM</td><td>{yes_no(sub.diabetes_mellitus)}</td></tr>
+        <tr><td class="label">Penyakit Ginjal</td><td>{yes_no(sub.kidney_disease)}</td></tr>
+        <tr><td class="label">Autoimune</td><td>{yes_no(sub.autoimmune_disease)}</td></tr>
+        <tr><td class="label">APS</td><td>{yes_no(sub.aps_history)}</td></tr>
+    </table>
+    <h3>Antropometri & Pemeriksaan</h3>
+    <table>
+        <tr><td class="label">BB Sebelum Hamil</td><td>{f'{sub.pre_pregnancy_weight} kg' if sub.pre_pregnancy_weight else '-'}</td></tr>
+        <tr><td class="label">Tinggi Badan</td><td>{f'{sub.height_cm} cm' if sub.height_cm else '-'}</td></tr>
+        <tr><td class="label">IMT</td><td>{f'{bmi_val} kg/m²' if bmi_val != '-' else '-'}</td></tr>
+        <tr><td class="label">LiLA</td><td>{f'{sub.lila_cm} cm' if sub.lila_cm else '-'}</td></tr>
+        <tr><td class="label">TD Sistolik</td><td>{f'{sub.systolic_bp} mmHg' if sub.systolic_bp else '-'}</td></tr>
+        <tr><td class="label">TD Diastolik</td><td>{f'{sub.diastolic_bp} mmHg' if sub.diastolic_bp else '-'}</td></tr>
+        <tr><td class="label">MAP</td><td>{f'{sub.map_mmhg} mmHg' if sub.map_mmhg else '-'}</td></tr>
+        <tr><td class="label">Hb</td><td>{f'{sub.hemoglobin} gr/dL' if sub.hemoglobin else '-'}</td></tr>
+    </table>
+    <h3>Riwayat Penyakit Keluarga</h3>
+    <table>
+        <tr><td class="label">HT Keluarga</td><td>{yes_no(sub.family_history_hypertension)}</td></tr>
+        <tr><td class="label">Ginjal Keluarga</td><td>{yes_no(sub.family_history_kidney)}</td></tr>
+        <tr><td class="label">Jantung Keluarga</td><td>{yes_no(sub.family_history_heart)}</td></tr>
+    </table>
+    
+    <div class="recommendations">
+        <h3>Rekomendasi</h3>
+        <ul>
+            {f'<li>Segera lakukan evaluasi klinis lebih lanjut.</li>' if is_pree else ''}
+            <li>Konsultasikan ke dokter kandungan.</li>
+            <li>Kontrol tekanan darah secara rutin.</li>
+        </ul>
+    </div>
+    
+    <p style="margin-top: 40px; font-size: 12px; color: #666;">
+        <strong>Disclaimer:</strong> Laporan ini adalah hasil analisis otomatis dan bukan pengganti konsultasi medis profesional. 
+        Selalu konsultasikan dengan dokter atau tenaga medis profesional untuk diagnosis dan pengobatan yang tepat.
+    </p>
+</body>
+</html>
+        """
+
+        # Try to convert HTML to PDF using xhtml2pdf
         try:
-            from reportlab.lib.pagesizes import A4
-            from reportlab.pdfgen import canvas
-
+            from xhtml2pdf import pisa
+            
             buffer = io.BytesIO()
-            p = canvas.Canvas(buffer, pagesize=A4)
-            width, height = A4
-            y = height - 50
-            line_height = 14
-
-            lines = [
-                f"LAPORAN PREDIKSI - ID: {sub.id}",
-                "",
-                f"Nama: {sub.patient_name}",
-                f"Usia: {sub.patient_age}",
-                f"Pendidikan: {sub.education_level}",
-                f"IMT: {sub.bmi}",
-                "",
-                "Hasil Prediksi:",
-                f" - {sub.result}",
-                f" - Confidence: {sub.confidence}",
-                "",
-                f"Dibuat: {sub.created_at}",
-            ]
-
-            p.setFont("Helvetica", 11)
-            for line in lines:
-                if y < 50:
-                    p.showPage()
-                    p.setFont("Helvetica", 11)
-                    y = height - 50
-                p.drawString(40, y, str(line))
-                y -= line_height
-
-            p.showPage()
-            p.save()
+            pisa_status = pisa.CreatePDF(html_content, dest=buffer, encoding='utf-8')
+            
+            if pisa_status.err:
+                # Jika xhtml2pdf gagal, return HTML untuk preview/print
+                response = HttpResponse(html_content, content_type="text/html")
+                if preview:
+                    return response
+                response["Content-Disposition"] = f'inline; filename="report_{sub.id}.html"'
+                return response
+            
             buffer.seek(0)
             response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
-            response["Content-Disposition"] = f'attachment; filename="report_{sub.id}.pdf"'
+            disp_type = "inline" if preview else "attachment"
+            response["Content-Disposition"] = f'{disp_type}; filename="report_{sub.id}.pdf"'
             return response
         except ImportError:
-            lines = [f"LAPORAN PREDIKSI - ID: {sub.id}", "", f"Nama: {sub.patient_name}", f"Usia: {sub.patient_age}", f"Pendidikan: {sub.education_level}", f"IMT: {sub.bmi}", "", "Hasil Prediksi:", f" - {sub.result}", f" - Confidence: {sub.confidence}", "", f"Dibuat: {sub.created_at}"]
-            content = "\n".join(lines)
-            response = HttpResponse(content, content_type="text/plain")
-            response["Content-Disposition"] = f'attachment; filename="report_{sub.id}.txt"'
+            # Jika xhtml2pdf tidak terpasang, return HTML untuk preview/print
+            response = HttpResponse(html_content, content_type="text/html")
+            if preview:
+                return response
+            response["Content-Disposition"] = f'inline; filename="report_{sub.id}.html"'
             return response
 
-    # fallback
+    # fallback tanpa submission_id
     content = "Laporan prediksi sederhana\nGunakan fitur ini untuk men-generate laporan nyata.\n"
     response = HttpResponse(content, content_type="text/plain")
     response["Content-Disposition"] = 'attachment; filename="report.txt"'

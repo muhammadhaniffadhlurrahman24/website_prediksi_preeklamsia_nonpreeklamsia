@@ -35,6 +35,26 @@
         <form method="POST" action="{% url 'login' %}" class="login-form">
           {% csrf_token %}
 
+          {% if error %}
+          <div style="background:#fee2e2;border:1px solid #fca5a5;color:#7f1d1d;padding:10px;border-radius:6px;margin-bottom:12px;">
+            {{ error }}
+          </div>
+          {% endif %}
+
+          {% if messages %}
+            {% for message in messages %}
+              {% if "success" in message.tags %}
+              <div style="background:#ecfdf3;border:1px solid #a7f3d0;color:#065f46;padding:10px;border-radius:6px;margin-bottom:12px;">
+                {{ message }}
+              </div>
+              {% else %}
+              <div style="background:#fee2e2;border:1px solid #fca5a5;color:#7f1d1d;padding:10px;border-radius:6px;margin-bottom:12px;">
+                {{ message }}
+              </div>
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+
           <div class="form-group">
             <label>Email</label>
             <input
@@ -92,11 +112,18 @@
         </p>
 
         {% if messages %}
+        <div id="django-messages" style="display:none;">
+          {% for message in messages %}
+          <div data-message="{{ message|escapejs }}"></div>
+          {% endfor %}
+        </div>
         <script>
           document.addEventListener("DOMContentLoaded", function () {
-            {% for message in messages %}
-            alert("{{ message|escapejs }}");
-            {% endfor %}
+            document
+              .querySelectorAll('#django-messages [data-message]')
+              .forEach(function (el) {
+                alert(el.getAttribute("data-message"));
+              });
           });
         </script>
         {% endif %}
