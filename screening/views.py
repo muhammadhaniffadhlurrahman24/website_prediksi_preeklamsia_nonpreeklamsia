@@ -308,20 +308,25 @@ def submit_screening(request):
             occ_raw = _clean_str(data.get('current_occupation'))
             occ_val = occupation_map.get(occ_raw, None)
 
-            # try to extract a numeric parity if possible (e.g., 'G2P1A0' -> 2), else None
+            # Map parity to numeric: Primipara=1, Multipara=2, Grandemulti=5
+            parity_map = {'Primipara': 1, 'Multipara': 2, 'Grandemulti': 5}
             parity_raw = _clean_str(data.get('parity'))
             parity_val = None
             if parity_raw:
-                import re
-                m = re.search(r'(\d+)', parity_raw)
-                if m:
-                    try:
-                        parity_val = int(m.group(1))
-                    except Exception:
-                        parity_val = None
+                # Cek apakah sudah ada di mapping
+                parity_val = parity_map.get(parity_raw)
+                if parity_val is None:
+                    # Fallback: try to extract numeric from string (untuk backward compatibility)
+                    import re
+                    m = re.search(r'(\d+)', parity_raw)
+                    if m:
+                        try:
+                            parity_val = int(m.group(1))
+                        except Exception:
+                            parity_val = None
 
-            # Map marital status to numeric if needed
-            marital_status_map = {'Belum Menikah': 0, 'Menikah': 1, 'Cerai Hidup': 2, 'Cerai Mati': 3}
+            # Map marital status to numeric: Sah=1 (menikah), Tidak=0, Siri=1 (juga menikah)
+            marital_status_map = {'Sah': 1, 'Tidak': 0, 'Siri': 1}
             marital_raw = _clean_str(data.get('marital_status'))
             marital_val = marital_status_map.get(marital_raw, 0)  # Default 0 jika tidak ada
 

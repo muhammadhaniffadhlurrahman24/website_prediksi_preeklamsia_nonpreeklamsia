@@ -113,12 +113,13 @@
 
             <div class="form-group">
               <label>2. Kabupaten/Kota</label>
-              <input
-                type="text"
-                name="district_city"
-                placeholder="Masukkan kabupaten/kota"
-                required
-              />
+              <select name="district_city" required>
+                <option value="">Pilih kabupaten/kota</option>
+                <option value="Bojonegoro">Bojonegoro</option>
+                <option value="Lamongan">Lamongan</option>
+                <option value="Surabaya">Surabaya</option>
+                <option value="Gresik">Gresik</option>
+              </select>
             </div>
 
             <div class="form-group">
@@ -165,10 +166,9 @@
               <label>6. Status Nikah</label>
               <select name="marital_status" required>
                 <option value="">Pilih status</option>
-                <option value="Belum Menikah">Belum Menikah</option>
-                <option value="Menikah">Menikah</option>
-                <option value="Cerai Hidup">Cerai Hidup</option>
-                <option value="Cerai Mati">Cerai Mati</option>
+                <option value="Sah">Sah</option>
+                <option value="Tidak">Tidak</option>
+                <option value="Siri">Siri</option>
               </select>
             </div>
 
@@ -187,12 +187,12 @@
 
             <div class="form-group">
               <label>8. Paritas</label>
-              <input
-                type="text"
-                name="parity"
-                placeholder="Contoh: G2P1A0"
-                required
-              />
+              <select name="parity" required>
+                <option value="">Pilih paritas</option>
+                <option value="Primipara">Primipara</option>
+                <option value="Multipara">Multipara</option>
+                <option value="Grandemulti">Grandemulti</option>
+              </select>
             </div>
           </div>
 
